@@ -310,7 +310,8 @@ function convert_and_view(args)
 					++n_blocks;
 				}
 				one_view.push("//");
-				view_result.push(one_view.join("</br>"))
+				view_result.push(one_view.join("\n"))
+				one_view = [];
 			}
 		}
 		return view_result;
