@@ -10,10 +10,10 @@ function convert_and_view(args)
 {
 
 
- 	function paf_sam2paf(text)
+ 	function paf_sam2paf(text, aliFormat)
 	{
 		var list_result = [];
-		var c, pri_only = false, long_cs = false;
+		var c, pri_only = false, long_cs = true; // long_cs activated by default to be able to create maf alignment
 		var lines = text.split('\n');
 		var re = /(\d+)([MIDSHNX=])/g, re_MD = /(\d+)|(\^[A-Za-z]+)|([A-Za-z])/g, re_tag = /\t(\S\S:[AZif]):(\S+)/g;
 
@@ -25,7 +25,7 @@ function convert_and_view(args)
 			// skip empty line
 			if (line.length == 0) {
 				continue
-            }
+			}
 			if (line.charAt(0) == '@') {
 				if (/^@SQ/.test(line)) {
 					var name = (m = /\tSN:(\S+)/.exec(line)) != null? m[1] : null;
@@ -40,6 +40,14 @@ function convert_and_view(args)
 				message.push("at line " + lineno + ": inconsistent SEQ and QUAL lengths - " + t[9].length + " != " + t[10].length);
 			if (t[2] == '*' || (flag&4) || t[5] == '*') continue;
 			if (pri_only && (flag&0x100)) continue;
+
+			var tlen = ctg_len[t[2]];
+			if (tlen == null){
+				if(aliFormat == "maf"){ // message needed only for maf because it is the only format for which we use this information
+    				list_result.push("warn: Can't find the length of contig " + t[2]);
+				}
+				tlen = "unknown";
+			}
 
 			// find tags
 			var nn = 0, NM = null, MD = null, cs_str = null, md_list = [];
@@ -157,18 +165,18 @@ function convert_and_view(args)
 			else if (cs.length > 0) tags.push("cs:Z:" + cs.join(""));
 			// print out
 			// we cheat on the length of the contig because we do not have the header to take it from
-			var a = [qname, qlen, qs, qe, flag&16? '-' : '+', t[2], 7291771, ts, te, mlen, blen, t[4]];
+			var a = [qname, qlen, qs, qe, flag&16? '-' : '+', t[2], tlen, ts, te, mlen, blen, t[4]];
 			list_result.push(a.join("\t")+"\t"+tags.join("\t")+"\n");
 		}
 
         return list_result;
 	}
 
-    function paf_view(paf_list)
+	function paf_view(paf_list, fmt)
 	{
 		var view_result = [];
 		var one_view = [];
-		var c, line_len = 80, fmt = "aln";
+		var c, line_len = 80;
 
 		function padding_str(x, len, right)
 		{
@@ -189,31 +197,31 @@ function convert_and_view(args)
 				s_mid.push(Array(l+1).join("|"));
 				slen[0] += l, slen[1] += l;
 			} else if (type == '*') {
-				s_ref.set(seq.charAt(0));
-				s_qry.set(seq.charAt(1));
-				s_mid.set(' ');
+				s_ref.push(seq.charAt(0));
+				s_qry.push(seq.charAt(1));
+				s_mid.push(' ');
 				slen[0] += 1, slen[1] += 1;
 			} else if (type == '+') {
-				s_ref.set(Array(l+1).join("-"));
-				s_qry.set(seq);
-				s_mid.set(Array(l+1).join(" "));
+				s_ref.push(Array(l+1).join("-"));
+				s_qry.push(seq);
+				s_mid.push(Array(l+1).join(" "));
 				slen[1] += l;
 			} else if (type == '-') {
-				s_ref.set(seq);
-				s_qry.set(Array(l+1).join("-"));
-				s_mid.set(Array(l+1).join(" "));
+				s_ref.push(seq);
+				s_qry.push(Array(l+1).join("-"));
+				s_mid.push(Array(l+1).join(" "));
 				slen[0] += l;
 			}
 		}
 
 		function print_aln(rs, qs, strand, slen, elen, s_ref, s_qry, s_mid)
 		{
-			one_view.push(["Ref+:", padding_str(rs + slen[0] + 1, 10, false), s_ref.toString(), padding_str(rs + elen[0], 10, true)].join(" "));
-			one_view.push("                 " + s_mid.toString());
+			one_view.push(["Ref+:", padding_str(rs + slen[0] + 1, 10, false), s_ref.join(""), padding_str(rs + elen[0], 10, true)].join(" "));
+			one_view.push("                 " + s_mid.join(""));
 			var st, en;
 			if (strand == '+') st = qs + slen[1] + 1, en = qs + elen[1];
 			else st = qs - slen[1], en = qs - elen[1] + 1;
-			one_view.push(["Qry" + strand + ":", padding_str(st, 10, false), s_qry.toString(), padding_str(en, 10, true)].join(" "));
+			one_view.push(["Qry" + strand + ":", padding_str(st, 10, false), s_qry.join(""), padding_str(en, 10, true)].join(" "));
 		}
 
 		var s_ref = [];
@@ -228,37 +236,43 @@ function convert_and_view(args)
 		for(var i = 0; i < paf_list.length; i++){
 			var m, line = paf_list[i];
 			var t = line.split("\t", 12);
+			if (line.startsWith("warn")){
+				view_result.push(line);
+				continue;
+			}
 			++lineno;
 			s_ref.length = s_qry.length = s_mid.length = 0;
 			var slen = [0, 0], elen = [0, 0];
 			if (fmt == "lastz-cigar") { // LASTZ-cigar output
 				var cg = (m = /\tcg:Z:(\S+)/.exec(line)) != null? m[1] : null;
 				if (cg == null) {
-					warn("WARNING: converting to LASTZ-cigar format requires the 'cg' tag, which is absent on line " + lineno);
+					view_result.push("WARNING: converting to LASTZ-cigar format requires the 'cg' tag, which is absent on line " + lineno);
 					continue;
 				}
 				var score = (m = /\tAS:i:(\d+)/.exec(line)) != null? m[1] : 0;
 				var out = ['cigar:', t[0], t[2], t[3], t[4], t[5], t[7], t[8], '+', score];
 				while ((m = re_cg.exec(cg)) != null)
 					out.push(m[2], m[1]);
-				one_view.push(out.join(" "));
+				view_result.push(out.join(" "));
 			}
 			else if (fmt == "maf") { // MAF output
 				var cs = (m = /\tcs:Z:(\S+)/.exec(line)) != null? m[1] : null;
 				if (cs == null) {
-					warn("WARNING: converting to MAF requires the 'cs' tag, which is absent on line " + lineno);
+					one_view.push("WARNING: converting to MAF requires the 'cs' tag, which is absent on line " + lineno);
 					continue;
 				}
 				while ((m = re_cs.exec(cs)) != null) {
-					if (m[1] == ':')
-						throw Error("converting to MAF only works with 'minimap2 --cs=long'");
+					if (m[1] == ':'){
+						one_view.push("converting to MAF only works with 'minimap2 --cs=long'");
+						return one_view.join("");
+					}
 					update_aln(s_ref, s_qry, s_mid, m[1], m[2], elen);
 				}
 				var score = (m = /\tAS:i:(\d+)/.exec(line)) != null? parseInt(m[1]) : 0;
 				var len = t[0].length > t[5].length? t[0].length : t[5].length;
 				one_view.push("a " + score);
 				one_view.push(["s", padding_str(t[5], len, true), padding_str(t[7], 10, false), padding_str(parseInt(t[8]) - parseInt(t[7]), 10, false),
-						"+", padding_str(t[6], 10, false), s_ref.toString()].join(" "));
+						"+", padding_str(t[6], 10, false), s_ref.join("")].join(" "));
 				var qs, qe, ql = parseInt(t[1]);
 				if (t[4] == '+') {
 					qs = parseInt(t[2]);
@@ -268,13 +282,15 @@ function convert_and_view(args)
 					qe = ql - parseInt(t[2]);
 				}
 				one_view.push(["s", padding_str(t[0], len, true), padding_str(qs, 10, false), padding_str(qe - qs, 10, false),
-						t[4], padding_str(ql, 10, false), s_qry.toString()].join(" "));
+						t[4], padding_str(ql, 10, false), s_qry.join("")].join(" "));
 				one_view.push("");
+			    view_result.push(one_view.join("\n"))
+				one_view = [];
 			}
 			else { // BLAST-like output
 				var cs = (m = /\tcs:Z:(\S+)/.exec(line)) != null? m[1] : null;
 				if (cs == null) {
-					warn("WARNING: converting to BLAST-like alignment requires the 'cs' tag, which is absent on line " + lineno);
+					one_view.push("WARNING: converting to BLAST-like alignment requires the 'cs' tag, which is absent on line " + lineno);
 					continue;
 				}
 				line = line.replace(/\tc[sg]:Z:\S+/g, ""); // get rid of cs or cg tags
@@ -332,9 +348,11 @@ function convert_and_view(args)
 		return;
 	}
 	else{
+		var aliFormat = document.querySelector('input[name="format"]:checked').value;
+		var paf_list   = paf_sam2paf(input, aliFormat);
+		console.log(aliFormat);
+		var draw_list   = paf_view(paf_list, aliFormat);
 		var resultPrefix = "<strong>Result: </strong>";
-		var paf_list   = paf_sam2paf(input);
-		var draw_list   = paf_view(paf_list);
 		document.getElementById('output').innerHTML = resultPrefix + "</br>" + draw_list;
 	}
 }
@@ -351,6 +369,14 @@ function convert_and_view(args)
 	<section>
 
 		<p>This utility makes it easy to visualise a read alignment against its reference.</p>
+
+		<form onSubmit="setFormat(); return false;" action="">
+			<strong>Select alignment type: </strong><br />
+			<input checked type="radio" name="format" value="aln">aln</input>
+			<input type="radio" name="format" value="lastz-cigar">lastz-cigar</input>
+			<input type="radio" name="format" value="maf">maf</input>
+			<br />
+		</form>
 
 		<h4>Enter a read in SAM format in the box below:<br /></h4>
 		<form onSubmit="convert_and_view(this.submitted); return false;" action="">
