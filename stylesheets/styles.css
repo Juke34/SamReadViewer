@@ -13,7 +13,7 @@ body {
 }
 
 .remove-all-styles {
-  all: revert;
+   all:unset; 
 }
 
 .wrapper {
