@@ -13,6 +13,8 @@ function convert_and_view(args)
  	function paf_sam2paf(text, aliFormat)
 	{
 		var list_result = [];
+		var next_line = null;
+		var contigs = [];
 		var c, pri_only = false, long_cs = true; // long_cs activated by default to be able to create maf alignment
 		var lines = text.split('\n');
 		var re = /(\d+)([MIDSHNX=])/g, re_MD = /(\d+)|(\^[A-Za-z]+)|([A-Za-z])/g, re_tag = /\t(\S\S:[AZif]):(\S+)/g;
@@ -36,15 +38,22 @@ function convert_and_view(args)
 			}
 			var t = line.split("\t", 11);
 			var flag = parseInt(t[1]);
-			if (t[9] != '*' && t[10] != '*' && t[9].length != t[10].length)
-				message.push("at line " + lineno + ": inconsistent SEQ and QUAL lengths - " + t[9].length + " != " + t[10].length);
+			if (t[9] != '*' && t[10] != '*' && t[9].length != t[10].length){
+				message.push("Error at line " + lineno + "(" + t[0] + "): inconsistent SEQ and QUAL lengths - " + t[9].length + " != " + t[10].length);
+				continue
+			}
 			if (t[2] == '*' || (flag&4) || t[5] == '*') continue;
 			if (pri_only && (flag&0x100)) continue;
 
 			var tlen = ctg_len[t[2]];
 			if (tlen == null){
-				if(aliFormat == "maf"){ // message needed only for maf because it is the only format for which we use this information
-    				list_result.push("warn: Can't find the length of contig " + t[2]);
+				if(aliFormat == "maf" || aliFormat == "aln"){ // message needed only for maf and aln because it is the only formats for which we use this information
+						// warn only once per contig
+						var index = contigs.findIndex(x => x.name==t[2]);
+						if (index === -1){
+							contigs.push({name:t[2]});
+							message.push("warning: Can't find the length of contig " + t[2] + ", value set to 'unknown'");
+						}
 				}
 				tlen = "unknown";
 			}
@@ -122,15 +131,31 @@ function convert_and_view(args)
 							} else if (op == 'S') {
 								cy += cl, my += cl, ++k;
 							}
-							else
-								message.push("at line " + lineno + ": inconsistent MD tag");
+							else{
+								message.push("Error at line " + lineno + "(" + t[0] + "): inconsistent MD tag");
+								next_line = 1;
+								break;
+							}
 						}
-						if (ml != 0)
-							message.push("at line " + lineno + ": inconsistent MD tag");
+						if (ml != 0 && !next_line){
+							message.push("Error at line " + lineno + "(" + t[0] + "): inconsistent MD tag");
+							next_line = 1;
+							continue
+						}
+					}
+					if (next_line){
+						break;
 					}
 				}
-				if (cx != mx || cy != my)
-					message.push("at line " + lineno + ": inconsistent MD tag");
+				if(next_line){
+					next_line = null;
+					continue;
+				}
+				if (cx != mx || cy != my){
+					message.push("Error at line " + lineno + "(" + t[0] + "): inconsistent MD tag");
+					next_line = 1;
+					continue
+				}
 			}
 			// compute matching length, block length and calibrate NM
 			if (have_ext && !have_M) { // extended CIGAR
@@ -168,8 +193,7 @@ function convert_and_view(args)
 			var a = [qname, qlen, qs, qe, flag&16? '-' : '+', t[2], tlen, ts, te, mlen, blen, t[4]];
 			list_result.push(a.join("\t")+"\t"+tags.join("\t")+"\n");
 		}
-
-        return list_result;
+		return list_result;
 	}
 
 	function paf_view(paf_list, fmt)
@@ -334,9 +358,9 @@ function convert_and_view(args)
 		return view_result.join("\n");
     }
 
-    // get messages when working
-    var message = [];
-    // get value
+	// get messages when working
+	var message = [];
+	// get value
 	var input = document.getElementById('input').value;
 	// skip empty value
 	if (/^(""|''|)$/.test(input) || input == null){ return}
@@ -353,7 +377,7 @@ function convert_and_view(args)
 		console.log(aliFormat);
 		var draw_list   = paf_view(paf_list, aliFormat);
 		var resultPrefix = "<strong>Result: </strong>";
-		document.getElementById('output').innerHTML = resultPrefix + "</br>" + draw_list;
+		document.getElementById('output').innerHTML = resultPrefix + "</br>" + message.join("\n") + "</br></br>" + draw_list;
 	}
 }
 
