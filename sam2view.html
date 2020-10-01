@@ -389,10 +389,10 @@ function convert_and_view(args)
 <div class="wrapper">
 	{% include header.html %}
 
-	<h2>De-novo representation of a read alignmenet from SAM format</h2>
+	<h2>De-novo representation of a read alignment from SAM format</h2>
 	<section>
 
-		<p>This utility makes it easy to visualise a read alignment against its reference.</p>
+		<p>This utility makes it easy to visualise a read alignment against its reference wihtout the reference. Indeed the reference is re-created based on the CIGAR string + the MD tag.</p>
 
 		<form onSubmit="setFormat(); return false;" action="">
 			<strong>Select alignment type: </strong><br />
