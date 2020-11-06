@@ -368,7 +368,7 @@ function convert_and_view(args)
 	var array = input.split("\t", 11);
 	var size = array.length;
 	if(size < 11){
-		document.getElementById('output').innerHTML = "It does not look like a Read in SAM format!";
+		document.getElementById('output').innerHTML = "It does not look like a Read in SAM format! The SAM format has 11 mandatory TAB-delimited fields but only "+array.length+" provided.";
 		return;
 	}
 	else{
@@ -416,7 +416,7 @@ function convert_and_view(args)
 D00118:252:C86N9ANXX:2:2307:2348:68874	1171	scaffold1	8697	60	125M	=	8521	-302	TAAATATGAGTCTGAAGGTGGCTTGAAGGAAAGCATCGGTGCCTGATTCCGGGAACTTTTCCATTGATATTGAGAAGTTTGAATTTGCTAAAAAAAAAGTCAAATTTCCAGACTCTAGGGAAAAA	=G@D///C/C0;0@@=BD8@C&lt;F8@D&lt;;00&gt;C.&lt;.&lt;/G@0&lt;&gt;0=00C&lt;&lt;/@C=111&lt;=E1EBC1&lt;1E:1@::1=1E1&gt;111@&gt;GE1?10E&lt;/&lt;1CFE=1:&gt;1GD@E1F;FB@111;EGBBBBBCB	AS:i:-21	XN:i:0	XM:i:7	XO:i:0	XG:i:0	NM:i:7	MD:Z:28A0G24G19T16C1C7G23	YS:i:-1	YT:Z:CP	NH:i:1
 </small>
 		</pre>
-		
+
 		<hr />
 		<pre>
 		<p id="output" style="word-break: break-all"></p>
